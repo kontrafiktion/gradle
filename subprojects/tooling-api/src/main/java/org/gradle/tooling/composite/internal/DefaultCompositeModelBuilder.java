@@ -36,6 +36,8 @@ public class DefaultCompositeModelBuilder<T> implements ModelBuilder<Set<T>> {
 
     protected DefaultCompositeModelBuilder(Class<T> modelType, AsyncConsumerActionExecutor asyncConnection, CompositeConnectionParameters parameters) {
         delegate = new DefaultModelBuilder<SetOfEclipseProjects>(SetOfEclipseProjects.class, asyncConnection, parameters);
+        delegate.setStandardOutput(System.out);
+        delegate.setStandardError(System.err);
         //delegate.setJvmArguments("-Xmx1G", "-Xdebug", "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005");
     }
 
