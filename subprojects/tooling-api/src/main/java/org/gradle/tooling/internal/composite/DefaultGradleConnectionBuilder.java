@@ -35,7 +35,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class DefaultGradleConnectionBuilder implements GradleConnectionInternal.Builder {
-    private final Set<GradleBuildInternal> participants = Sets.newLinkedHashSet();
+    private final Set<GradleBuildInternal> builds = Sets.newLinkedHashSet();
     private final GradleConnectionFactory gradleConnectionFactory;
     private final DistributionFactory distributionFactory;
     private File gradleUserHomeDir;
@@ -73,13 +73,13 @@ public class DefaultGradleConnectionBuilder implements GradleConnectionInternal.
         if (!(gradleBuild instanceof GradleBuildInternal)) {
             throw new IllegalArgumentException("GradleBuild has an internal API that must be implemented.");
         }
-        participants.add((GradleBuildInternal)gradleBuild);
+        builds.add((GradleBuildInternal) gradleBuild);
         return this;
     }
 
     @Override
     public GradleConnectionInternal build() throws GradleConnectionException {
-        if (participants.isEmpty()) {
+        if (builds.isEmpty()) {
             throw new IllegalStateException("At least one participant must be specified before creating a connection.");
         }
 
@@ -91,8 +91,8 @@ public class DefaultGradleConnectionBuilder implements GradleConnectionInternal.
 
     private boolean useDaemonCoordinator() {
         // TODO:DAZ Provide a way to force the use of the daemon coordinator?
-        for (GradleBuildInternal participant : participants) {
-            ProjectConnection connect = createParticipantBuild(participant).connect();
+        for (GradleBuildInternal build : builds) {
+            ProjectConnection connect = createParticipant(build).connect();
             try {
                 BuildEnvironment model = connect.getModel(BuildEnvironment.class);
                 if (!model.getGradle().getGradleVersion().equals(GradleVersion.current().getVersion())) {
@@ -107,7 +107,7 @@ public class DefaultGradleConnectionBuilder implements GradleConnectionInternal.
 
     private GradleConnectionInternal createDaemonCoordinatorGradleConnection() {
         DefaultCompositeConnectionParameters.Builder compositeConnectionParametersBuilder = DefaultCompositeConnectionParameters.builder();
-        compositeConnectionParametersBuilder.setBuilds(participants);
+        compositeConnectionParametersBuilder.setBuilds(builds);
         compositeConnectionParametersBuilder.setGradleUserHomeDir(gradleUserHomeDir);
         compositeConnectionParametersBuilder.setEmbedded(embeddedCoordinator);
         compositeConnectionParametersBuilder.setDaemonMaxIdleTimeValue(daemonMaxIdleTimeValue);
@@ -125,17 +125,17 @@ public class DefaultGradleConnectionBuilder implements GradleConnectionInternal.
     }
 
     private GradleConnectionInternal createToolingClientGradleConnection() {
-        Set<GradleParticipantBuild> gradleParticipantBuilds = CollectionUtils.collect(participants, new Transformer<GradleParticipantBuild, GradleBuildInternal>() {
+        Set<GradleConnectionParticipant> participants = CollectionUtils.collect(builds, new Transformer<GradleConnectionParticipant, GradleBuildInternal>() {
             @Override
-            public GradleParticipantBuild transform(GradleBuildInternal gradleBuildInternal) {
-                return createParticipantBuild(gradleBuildInternal);
+            public GradleConnectionParticipant transform(GradleBuildInternal gradleBuildInternal) {
+                return createParticipant(gradleBuildInternal);
             }
         });
-        return new ToolingClientGradleConnection(gradleParticipantBuilds);
+        return new ToolingClientGradleConnection(participants);
     }
 
-    private GradleParticipantBuild createParticipantBuild(GradleBuildInternal participant) {
-        return new GradleParticipantBuild(participant, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
+    private GradleConnectionParticipant createParticipant(GradleBuildInternal participant) {
+        return new DefaultGradleConnectionParticipant(participant, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
     }
 
     @Override

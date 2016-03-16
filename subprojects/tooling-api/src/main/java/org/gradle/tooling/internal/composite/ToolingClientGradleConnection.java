@@ -26,10 +26,10 @@ import org.gradle.tooling.composite.ModelResults;
 import java.util.Set;
 
 public class ToolingClientGradleConnection implements GradleConnectionInternal {
-    private final Set<GradleParticipantBuild> participants;
+    private final Set<GradleConnectionParticipant> participants;
     private boolean closed;
 
-    public ToolingClientGradleConnection(Set<GradleParticipantBuild> participants) {
+    public ToolingClientGradleConnection(Set<GradleConnectionParticipant> participants) {
         this.participants = participants;
     }
 
@@ -54,7 +54,7 @@ public class ToolingClientGradleConnection implements GradleConnectionInternal {
     public BuildLauncher newBuild(BuildIdentity buildIdentity) {
         checkOpen();
         // TODO:DAZ These connections are not being closed
-        for (GradleParticipantBuild participant : participants) {
+        for (GradleConnectionParticipant participant : participants) {
             if (participant.toBuildIdentity().equals(buildIdentity)) {
                 return participant.connect().newBuild();
             }

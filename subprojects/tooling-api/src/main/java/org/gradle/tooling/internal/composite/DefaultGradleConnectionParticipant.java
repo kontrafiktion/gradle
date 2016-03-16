@@ -25,7 +25,7 @@ import org.gradle.tooling.internal.consumer.DefaultGradleConnector;
 import java.io.File;
 import java.util.concurrent.TimeUnit;
 
-class GradleParticipantBuild {
+class DefaultGradleConnectionParticipant implements GradleConnectionParticipant {
     private final GradleBuildInternal build;
     private final File gradleUserHome;
     private final File projectDirectory;
@@ -33,11 +33,11 @@ class GradleParticipantBuild {
     private final Integer daemonMaxIdleTimeValue;
     private final TimeUnit daemonMaxIdleTimeUnits;
 
-    public GradleParticipantBuild(GradleBuildInternal build, File gradleUserHome, File daemonBaseDir, Integer daemonMaxIdleTimeValue, TimeUnit daemonMaxIdleTimeUnits) {
+    public DefaultGradleConnectionParticipant(GradleBuildInternal build, File gradleUserHome, File daemonBaseDir, Integer daemonMaxIdleTimeValue, TimeUnit daemonMaxIdleTimeUnits) {
         this(build, build.getProjectDir(), gradleUserHome, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
     }
 
-    private GradleParticipantBuild(GradleBuildInternal build, File projectDirectory, File gradleUserHome, File daemonBaseDir, Integer daemonMaxIdleTimeValue, TimeUnit daemonMaxIdleTimeUnits) {
+    private DefaultGradleConnectionParticipant(GradleBuildInternal build, File projectDirectory, File gradleUserHome, File daemonBaseDir, Integer daemonMaxIdleTimeValue, TimeUnit daemonMaxIdleTimeUnits) {
         this.build = build;
         this.projectDirectory = projectDirectory;
         this.gradleUserHome = gradleUserHome;
@@ -46,18 +46,22 @@ class GradleParticipantBuild {
         this.daemonMaxIdleTimeUnits = daemonMaxIdleTimeUnits;
     }
 
-    public GradleParticipantBuild withProjectDirectory(File projectDirectory) {
-        return new GradleParticipantBuild(build, projectDirectory, gradleUserHome, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
+    @Override
+    public GradleConnectionParticipant withProjectDirectory(File projectDirectory) {
+        return new DefaultGradleConnectionParticipant(build, projectDirectory, gradleUserHome, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
     }
 
+    @Override
     public ProjectIdentity toProjectIdentity(String projectPath) {
         return build.toProjectIdentity(projectPath);
     }
 
+    @Override
     public BuildIdentity toBuildIdentity() {
         return build.toBuildIdentity();
     }
 
+    @Override
     public ProjectConnection connect() {
         return connector().forProjectDirectory(projectDirectory).connect();
     }
