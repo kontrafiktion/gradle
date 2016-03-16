@@ -17,10 +17,10 @@
 package org.gradle.tooling.internal.provider.runner;
 
 import org.gradle.StartParameter;
-import org.gradle.TaskExecutionRequest;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuildContext;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeContextBuilder;
 import org.gradle.api.logging.LogLevel;
+import org.gradle.configuration.GradleLauncherMetaData;
 import org.gradle.initialization.*;
 import org.gradle.internal.Cast;
 import org.gradle.internal.UncheckedException;
@@ -35,12 +35,9 @@ import org.gradle.launcher.exec.BuildActionParameters;
 import org.gradle.launcher.exec.DefaultBuildActionParameters;
 import org.gradle.launcher.exec.InProcessBuildActionExecuter;
 import org.gradle.logging.ProgressLoggerFactory;
-import org.gradle.tooling.*;
+import org.gradle.tooling.BuildController;
 import org.gradle.tooling.internal.adapter.ProtocolToModelAdapter;
-import org.gradle.tooling.internal.consumer.CancellationTokenInternal;
-import org.gradle.tooling.internal.consumer.DefaultGradleConnector;
 import org.gradle.tooling.internal.consumer.connection.InternalBuildActionAdapter;
-import org.gradle.tooling.internal.protocol.CompositeBuildExceptionVersion1;
 import org.gradle.tooling.internal.protocol.DefaultBuildIdentity;
 import org.gradle.tooling.internal.protocol.DefaultProjectIdentity;
 import org.gradle.tooling.internal.protocol.InternalBuildAction;
@@ -49,8 +46,10 @@ import org.gradle.tooling.model.gradle.BasicGradleProject;
 
 import java.io.File;
 import java.io.Serializable;
-import java.util.*;
-import java.util.concurrent.TimeUnit;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class CompositeBuildModelActionRunner implements CompositeBuildActionRunner {
     public void run(BuildAction action, BuildRequestContext requestContext, CompositeBuildActionParameters actionParameters, CompositeBuildController buildController) {
@@ -67,13 +66,13 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             if (!((BuildModelAction) action).isRunTasks()) {
                 throw new IllegalStateException("No tasks defined.");
             }
-            executeTasks(action.getStartParameter(), actionParameters, requestContext.getCancellationToken(), progressLoggerFactory);
+            executeTasksInProcess(action.getStartParameter(), actionParameters, requestContext.getCancellationToken(), progressLoggerFactory, buildController.getBuildScopeServices());
         }
         PayloadSerializer payloadSerializer = buildController.getBuildScopeServices().get(PayloadSerializer.class);
         buildController.setResult(new BuildActionResult(payloadSerializer.serialize(results), null));
     }
 
-    private void executeTasks(StartParameter startParameter, CompositeBuildActionParameters actionParameters, BuildCancellationToken cancellationToken, ProgressLoggerFactory progressLoggerFactory) {
+    private void executeTasksInProcess(StartParameter parentStartParam, CompositeBuildActionParameters actionParameters, BuildCancellationToken cancellationToken, ProgressLoggerFactory progressLoggerFactory, ServiceRegistry sharedServices) {
         CompositeParameters compositeParameters = actionParameters.getCompositeParameters();
         boolean buildFound = false;
         for (GradleParticipantBuild participant : compositeParameters.getBuilds()) {
@@ -84,36 +83,13 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             if (cancellationToken.isCancellationRequested()) {
                 break;
             }
-            ProjectConnection projectConnection = connect(participant, compositeParameters);
-            try {
-                BuildLauncher buildLauncher = projectConnection.newBuild();
-                buildLauncher.withCancellationToken(new CancellationTokenAdapter(cancellationToken));
-                buildLauncher.addProgressListener(new ProgressListenerToProgressLoggerAdapter(progressLoggerFactory));
-                List<String> taskArgs = new ArrayList<String>();
-                for (TaskExecutionRequest request : startParameter.getTaskRequests()) {
-                    if (request.getProjectPath() == null) {
-                        taskArgs.addAll(request.getArgs());
-                    } else {
-                        String projectPath = request.getProjectPath();
-                        int index = 0;
-                        for (String arg : request.getArgs()) {
-                            if (index == 0) {
-                                // add project path to first arg
-                                taskArgs.add(projectPath + ":" + arg);
-                            } else {
-                                taskArgs.add(arg);
-                            }
-                            index++;
-                        }
-                    }
-                }
-                buildLauncher.forTasks(taskArgs.toArray(new String[0]));
-                buildLauncher.run();
-            } catch (GradleConnectionException e) {
-                throw new CompositeBuildExceptionVersion1(e, new DefaultBuildIdentity(compositeParameters.getCompositeTargetBuildRootDir()));
-            } finally {
-                projectConnection.close();
-            }
+            StartParameter startParameter = parentStartParam.newInstance();
+            startParameter.setProjectDir(participant.getProjectDir());
+            startParameter.setSearchUpwards(false);
+
+            GradleLauncherFactory launcherFactory = sharedServices.get(GradleLauncherFactory.class);
+            DefaultBuildRequestContext requestContext = new DefaultBuildRequestContext(new DefaultBuildRequestMetaData(new GradleLauncherMetaData(), System.currentTimeMillis()), new DefaultBuildCancellationToken(), new NoOpBuildEventConsumer());
+            launcherFactory.newInstance(startParameter, requestContext, sharedServices).run();
         }
         if (!buildFound) {
             throw new IllegalStateException("Build not part of composite");
@@ -127,17 +103,6 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         } catch (ClassNotFoundException e) {
             throw UncheckedException.throwAsUncheckedException(e);
         }
-    }
-
-    private Map<Object, Object> aggregateModels(BuildModelAction action, CompositeBuildController buildController, Class<?> modelType, CompositeBuildActionParameters actionParameters, BuildCancellationToken cancellationToken, ProgressLoggerFactory progressLoggerFactory) {
-        final Map<Object, Object> results = new HashMap<Object, Object>();
-        final CompositeParameters compositeParameters = actionParameters.getCompositeParameters();
-        results.putAll(fetchCompositeModelsInProcess(action, modelType, compositeParameters.getBuilds(), cancellationToken, buildController.getBuildScopeServices()));
-        return results;
-    }
-
-    private DefaultProjectIdentity convertToProjectIdentity(InternalProjectIdentity internalProjectIdentity) {
-        return new DefaultProjectIdentity(new DefaultBuildIdentity(internalProjectIdentity.rootDir), internalProjectIdentity.rootDir, internalProjectIdentity.projectPath);
     }
 
     private <T> Map<Object, Object> fetchCompositeModelsInProcess(BuildModelAction modelAction, Class<T> modelType, List<GradleParticipantBuild> participantBuilds,
@@ -199,6 +164,10 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         return results;
     }
 
+    private DefaultProjectIdentity convertToProjectIdentity(InternalProjectIdentity internalProjectIdentity) {
+        return new DefaultProjectIdentity(new DefaultBuildIdentity(internalProjectIdentity.rootDir), internalProjectIdentity.rootDir, internalProjectIdentity.projectPath);
+    }
+
     private CompositeBuildContext constructCompositeContext(GradleLauncherFactory gradleLauncherFactory, List<GradleParticipantBuild> participantBuilds) {
         CompositeContextBuilder builder = new CompositeContextBuilder(gradleLauncherFactory);
         for (GradleParticipantBuild participant : participantBuilds) {
@@ -243,73 +212,6 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         private InternalProjectIdentity(File rootDir, String projectPath) {
             this.rootDir = rootDir;
             this.projectPath = projectPath;
-        }
-    }
-
-    private ProjectConnection connect(GradleParticipantBuild build, CompositeParameters compositeParameters) {
-        DefaultGradleConnector connector = getInternalConnector();
-        File gradleUserHomeDir = compositeParameters.getGradleUserHomeDir();
-        File daemonBaseDir = compositeParameters.getDaemonBaseDir();
-        Integer daemonMaxIdleTimeValue = compositeParameters.getDaemonMaxIdleTimeValue();
-        TimeUnit daemonMaxIdleTimeUnits = compositeParameters.getDaemonMaxIdleTimeUnits();
-        Boolean embeddedParticipants = compositeParameters.isEmbeddedParticipants();
-
-        if (gradleUserHomeDir != null) {
-            connector.useGradleUserHomeDir(gradleUserHomeDir);
-        }
-        if (daemonBaseDir != null) {
-            connector.daemonBaseDir(daemonBaseDir);
-        }
-        if (daemonMaxIdleTimeValue != null && daemonMaxIdleTimeUnits != null) {
-            connector.daemonMaxIdleTime(daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
-        }
-        connector.searchUpwards(false);
-        connector.forProjectDirectory(build.getProjectDir());
-
-        if (embeddedParticipants) {
-            connector.embedded(true);
-            connector.useClasspathDistribution();
-            return connector.connect();
-        } else {
-            return configureDistribution(connector, build).connect();
-        }
-    }
-
-    private DefaultGradleConnector getInternalConnector() {
-        return (DefaultGradleConnector) GradleConnector.newConnector();
-    }
-
-    private GradleConnector configureDistribution(GradleConnector connector, GradleParticipantBuild build) {
-        if (build.getGradleDistribution() == null) {
-            if (build.getGradleHome() == null) {
-                if (build.getGradleVersion() == null) {
-                    connector.useBuildDistribution();
-                } else {
-                    connector.useGradleVersion(build.getGradleVersion());
-                }
-            } else {
-                connector.useInstallation(build.getGradleHome());
-            }
-        } else {
-            connector.useDistribution(build.getGradleDistribution());
-        }
-
-        return connector;
-    }
-
-    private final static class CancellationTokenAdapter implements CancellationToken, CancellationTokenInternal {
-        private final BuildCancellationToken token;
-
-        private CancellationTokenAdapter(BuildCancellationToken token) {
-            this.token = token;
-        }
-
-        public boolean isCancellationRequested() {
-            return token.isCancellationRequested();
-        }
-
-        public BuildCancellationToken getToken() {
-            return token;
         }
     }
 
