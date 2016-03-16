@@ -28,7 +28,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 public class DefaultBuildLauncher extends AbstractLongRunningOperation<DefaultBuildLauncher> implements BuildLauncher {
-    private final AsyncConsumerActionExecutor connection;
+    protected final AsyncConsumerActionExecutor connection;
 
     public DefaultBuildLauncher(AsyncConsumerActionExecutor connection, ConnectionParameters parameters) {
         super(parameters);

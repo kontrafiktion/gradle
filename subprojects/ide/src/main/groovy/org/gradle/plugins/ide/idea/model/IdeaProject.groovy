@@ -15,7 +15,7 @@
  */
 
 package org.gradle.plugins.ide.idea.model
-import groovy.transform.PackageScope
+
 import org.gradle.api.Incubating
 import org.gradle.api.JavaVersion
 import org.gradle.plugins.ide.api.XmlFileContentMerger
@@ -112,47 +112,37 @@ class IdeaProject {
     /**
      * The default Java language Level to use for this project.
      * <p>
-     * This is calculated as the maximum {@code sourceCompatibility} value for all Java projects that form the
-     * Idea modules of this Idea project.
+     * Generally, it isn't recommended to change this value. Instead, you are encouraged to set {@code sourceCompatibility} and {@code targetCompatibility}
+     * for your Gradle projects which allows you to have full control over language levels in Gradle projects, and means that Gradle and IDEA will use the same
+     * settings when compiling.
+     * <p>
+     * When not explicitly set, this is calculated as the maximum language level for the Idea modules of this Idea project.
      */
     IdeaLanguageLevel languageLevel
 
-
     /**
-     * The default target bytecode version to use for this project.
+     * The target bytecode version to use for this project.
      * <p>
-     * This is calculated as the maximum {@code targetCompatibility} value for all Java projects that form the
-     * Idea modules of this Idea project.
+     * Generally, it isn't recommended to change this value. Instead, you are encouraged to set {@code sourceCompatibility} and {@code targetCompatibility}
+     * for your Gradle projects which allows you to have full control over language levels in Gradle projects, and means that Gradle and IDEA will use the same
+     * settings when compiling.
+     * <p>
+     * When {@code languageLevel} is not explicitly set, this is calculated as the maximum target bytecode version for the Idea modules of this Idea project.
      */
     @Incubating
     JavaVersion targetBytecodeVersion
 
     /**
-     * Marker for tracking explicit configured languageLevel: this is consumed by `IdeaModule`,
-     * and is not part of the IdeaProject API.
-     */
-    private boolean hasUserSpecifiedLanguageLevel
-
-    /**
-     * Packaged scoped getter method for {@code hasUserSpecifiedLanguageLevel} to be consumed by `IdeaModule`,
-     * and is not part of the IdeaProject API.
-     * */
-    @PackageScope
-    boolean  getHasUserSpecifiedLanguageLevel() {
-        return hasUserSpecifiedLanguageLevel
-    }
-
-    /**
-     * Sets java language level of the project.
+     * Sets the java language level for the project.
      * Pass a valid Java version number (e.g. '1.5') or IDEA language level (e.g. 'JDK_1_5').
      * <p>
      * See the examples in the docs for {@link IdeaProject}.
      * <p>
-     * When explicitly set, this setting overrides any calculated values for Idea project and Idea module.
+     * When explicitly set in the build script, this setting overrides any calculated values for Idea project
+     * and Idea module.
      */
     void setLanguageLevel(Object languageLevel) {
         this.languageLevel = new IdeaLanguageLevel(languageLevel)
-        this.hasUserSpecifiedLanguageLevel = true
     }
 
     /**

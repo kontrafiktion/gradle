@@ -21,30 +21,29 @@ Out-of-scope are the following improvements:
 - Faster builds for build authoring and other use cases outside the dev loop.
 - Faster builds for non-daemon usage.
 - Making Java compilation faster, including improvements to incremental compile or adding compile avoidance.
+- Improving parallel project execution
+- Improving configure on demand
 
 Here 'out-of-scope' means only that these use cases won't be specifically prioritized. If these use cases happen to improve due to other work, then that's a good thing. 
 
-TBD: 
-
-- parallel execution in or out of scope?
-- configure-on-demand in or out of scope?
-
 ## Features
 
+- [ ] [More efficient performance metrics gathering](more-efficient-performance-metrics-gathering)
+    - Infrastructure changes to improve efficiency when using or developing performance tests
 - [ ] [Faster test execution startup](faster-test-execution-startup)
-- [ ] [Faster build configuration](faster-build-configuration)
+    - Maven vs Gradle benchmarks
+    - Investigate hotspots in test execution startup
+    - Improve progress logging to indicate the actual start of test execution
+- [ ] [Faster build startup](faster-build-startup)
+    - Reduce per build and per project fixed costs
+    - Fix startup and configuration hotspots
+    - Improve progress logging to give better insight to startup
 - [ ] [Faster incremental builds](faster-incremental-builds)
-    - [ ] Improved file system scanning
-    - [ ] Faster dependency resolution
+    - Faster up-to-date checks
+    - Faster dependency resolution
 - [ ] [Daemon on by default for all users](daemon-on-by-default)
-    - [ ] Fix robustness and diagnostic issues that prevent the daemon to be enabled by default
-    - [ ] Enable daemon self-monitoring
-    - [ ] [Fix Windows specific blockers](daemon-on-by-default/windows-blockers)
-    - [ ] Enable by default
-    
-TBD:    
-
-- Finish parallel project execution and mark as stable?
-- Switch on parallel project execution as default?
-- Finish configure on demand and mark as stable?
-- Switch on configure on demand as default?
+    - [Daemon uses fewer developer machine resources](daemon-on-by-default/daemon-uses-fewer-resources)
+    - [Daemon is robust](daemon-on-by-default/daemon-is-robust)
+    - [Support all use cases that are supported by non-daemon execution](daemon-on-by-default/daemon-use-case-parity)
+    - [Fix Windows specific blockers](daemon-on-by-default/windows-blockers)
+    - Enable by default

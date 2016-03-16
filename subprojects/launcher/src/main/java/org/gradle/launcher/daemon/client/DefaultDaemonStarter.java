@@ -34,7 +34,6 @@ import org.gradle.launcher.daemon.bootstrap.GradleDaemon;
 import org.gradle.launcher.daemon.configuration.DaemonParameters;
 import org.gradle.launcher.daemon.diagnostics.DaemonStartupInfo;
 import org.gradle.launcher.daemon.registry.DaemonDir;
-import org.gradle.process.ExecResult;
 import org.gradle.process.internal.ExecHandle;
 import org.gradle.process.internal.child.EncodedStream;
 import org.gradle.util.Clock;
@@ -46,6 +45,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 public class DefaultDaemonStarter implements DaemonStarter {
 
@@ -66,8 +66,7 @@ public class DefaultDaemonStarter implements DaemonStarter {
     }
 
     public DaemonStartupInfo startDaemon() {
-        // Ensure we have a unique UID any time we start a new daemon
-        daemonParameters.resetUid();
+        String daemonUid = UUID.randomUUID().toString();
 
         ModuleRegistry registry = new DefaultModuleRegistry();
         ClassPath classpath;
@@ -115,7 +114,7 @@ public class DefaultDaemonStarter implements DaemonStarter {
             encoder.writeString(daemonParameters.getGradleUserHomeDir().getAbsolutePath());
             encoder.writeString(daemonDir.getBaseDir().getAbsolutePath());
             encoder.writeSmallInt(daemonParameters.getIdleTimeout());
-            encoder.writeString(daemonParameters.getUid());
+            encoder.writeString(daemonUid);
             encoder.writeSmallInt(daemonOpts.size());
             for (String daemonOpt : daemonOpts) {
                 encoder.writeString(daemonOpt);
@@ -146,10 +145,10 @@ public class DefaultDaemonStarter implements DaemonStarter {
 
             handle.start();
             LOGGER.debug("Gradle daemon process is starting. Waiting for the daemon to detach...");
-            ExecResult result = handle.waitForFinish();
+            handle.waitForFinish();
             LOGGER.debug("Gradle daemon process is now detached.");
 
-            return daemonGreeter.parseDaemonOutput(outputConsumer.getProcessOutput(), result);
+            return daemonGreeter.parseDaemonOutput(outputConsumer.getProcessOutput());
         } catch (GradleException e) {
             throw e;
         } catch (Exception e) {

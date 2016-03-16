@@ -24,7 +24,7 @@ import org.gradle.test.fixtures.file.TestDirectoryProvider
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.tooling.GradleConnector
 import org.gradle.tooling.ProjectConnection
-import org.gradle.tooling.composite.internal.GradleConnectionInternal
+import org.gradle.tooling.internal.composite.GradleConnectionInternal
 import org.gradle.tooling.internal.consumer.DefaultGradleConnector
 import org.gradle.util.GradleVersion
 import org.junit.rules.TestRule
@@ -204,12 +204,11 @@ class ToolingApi implements TestRule {
         builder.daemonBaseDir(new File(daemonBaseDir.path))
         builder.daemonMaxIdleTime(120, TimeUnit.SECONDS)
         builder.embeddedCoordinator(embedded)
-        if (useClasspathImplementation) {
-            builder.useClasspathDistribution()
-        } else {
-            // TODO: Support this later
-            // connector.useInstallation(dist.gradleHomeDir.absoluteFile)
-        }
+        builder.useInstallation(dist.gradleHomeDir.absoluteFile)
         builder
+    }
+
+    def createCompositeParticipant(File rootDir) {
+        GradleConnector.newGradleBuildBuilder().forProjectDirectory(rootDir.absoluteFile).useInstallation(dist.gradleHomeDir.absoluteFile).create()
     }
 }

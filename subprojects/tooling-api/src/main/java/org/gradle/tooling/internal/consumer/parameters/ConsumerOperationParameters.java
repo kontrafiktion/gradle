@@ -20,7 +20,7 @@ import org.gradle.api.GradleException;
 import org.gradle.initialization.BuildCancellationToken;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.tooling.CancellationToken;
-import org.gradle.tooling.composite.internal.GradleParticipantBuild;
+import org.gradle.tooling.internal.composite.GradleBuildInternal;
 import org.gradle.tooling.events.ProgressListener;
 import org.gradle.tooling.internal.adapter.ProtocolToModelAdapter;
 import org.gradle.tooling.internal.consumer.CancellationTokenInternal;
@@ -65,6 +65,7 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
         private List<String> tasks;
         private List<InternalLaunchable> launchables;
         private ClassPath injectedPluginClasspath = ClassPath.EMPTY;
+        private File compositeTargetBuildRootDir;
 
         private Builder() {
         }
@@ -169,6 +170,11 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
             this.cancellationToken = cancellationToken;
         }
 
+        public Builder setCompositeTargetBuildRootDir(File compositeTargetBuildRootDir) {
+            this.compositeTargetBuildRootDir = compositeTargetBuildRootDir;
+            return this;
+        }
+
         public ConsumerOperationParameters build() {
             if (entryPoint == null) {
                 throw new IllegalStateException("No entry point specified.");
@@ -181,7 +187,7 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
             FailsafeBuildProgressListenerAdapter buildProgressListenerAdapter = new FailsafeBuildProgressListenerAdapter(
                 new BuildProgressListenerAdapter(this.testProgressListeners, this.taskProgressListeners, this.buildOperationProgressListeners));
             return new ConsumerOperationParameters(entryPoint, parameters, stdout, stderr, colorOutput, stdin, javaHome, jvmArguments, arguments, tasks, launchables, injectedPluginClasspath,
-                progressListenerAdapter, buildProgressListenerAdapter, cancellationToken);
+                progressListenerAdapter, buildProgressListenerAdapter, cancellationToken, compositeTargetBuildRootDir);
         }
     }
 
@@ -203,10 +209,11 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
     private final List<String> tasks;
     private final List<InternalLaunchable> launchables;
     private final ClassPath injectedPluginClasspath;
+    private final File compositeTargetBuildRootDir;
 
     private ConsumerOperationParameters(String entryPointName, ConnectionParameters parameters, OutputStream stdout, OutputStream stderr, Boolean colorOutput, InputStream stdin,
                                         File javaHome, List<String> jvmArguments, List<String> arguments, List<String> tasks, List<InternalLaunchable> launchables, ClassPath injectedPluginClasspath,
-                                        ProgressListenerAdapter progressListener, FailsafeBuildProgressListenerAdapter buildProgressListener, CancellationToken cancellationToken) {
+                                        ProgressListenerAdapter progressListener, FailsafeBuildProgressListenerAdapter buildProgressListener, CancellationToken cancellationToken, File compositeTargetBuildRootDir) {
         this.entryPointName = entryPointName;
         this.parameters = parameters;
         this.stdout = stdout;
@@ -222,6 +229,7 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
         this.progressListener = progressListener;
         this.buildProgressListener = buildProgressListener;
         this.cancellationToken = cancellationToken;
+        this.compositeTargetBuildRootDir = compositeTargetBuildRootDir;
     }
 
     private static void validateJavaHome(File javaHome) {
@@ -370,11 +378,15 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
         return ((CancellationTokenInternal) cancellationToken).getToken();
     }
 
-    public List<GradleParticipantBuild> getBuilds() {
+    public List<GradleBuildInternal> getBuilds() {
         return parameters instanceof CompositeConnectionParameters ? ((CompositeConnectionParameters) parameters).getBuilds() : null;
     }
 
     public Boolean isEmbeddedParticipants() {
         return parameters instanceof CompositeConnectionParameters ? ((CompositeConnectionParameters) parameters).isEmbeddedParticipants() : Boolean.FALSE;
+    }
+
+    public File getCompositeTargetBuildRootDir() {
+        return compositeTargetBuildRootDir;
     }
 }

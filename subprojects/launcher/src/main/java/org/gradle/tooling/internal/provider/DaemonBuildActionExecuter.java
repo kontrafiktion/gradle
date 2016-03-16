@@ -21,6 +21,9 @@ import org.gradle.initialization.ReportedException;
 import org.gradle.internal.SystemProperties;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.classpath.DefaultClassPath;
+import org.gradle.internal.composite.CompositeParameters;
+import org.gradle.internal.composite.DefaultGradleParticipantBuild;
+import org.gradle.internal.composite.GradleParticipantBuild;
 import org.gradle.internal.invocation.BuildAction;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.launcher.daemon.configuration.DaemonParameters;
@@ -33,9 +36,6 @@ import org.gradle.tooling.internal.protocol.BuildExceptionVersion1;
 import org.gradle.tooling.internal.protocol.InternalBuildCancelledException;
 import org.gradle.tooling.internal.protocol.InternalCancellationToken;
 import org.gradle.tooling.internal.protocol.ModelIdentifier;
-import org.gradle.tooling.internal.provider.connection.CompositeParameters;
-import org.gradle.tooling.internal.provider.connection.DefaultGradleParticipantBuild;
-import org.gradle.tooling.internal.provider.connection.GradleParticipantBuild;
 import org.gradle.tooling.internal.provider.connection.ProviderOperationParameters;
 
 import java.io.File;
@@ -66,7 +66,7 @@ public class DaemonBuildActionExecuter implements BuildActionExecuter<ProviderOp
             for (GradleParticipantBuild build : compositeParticipants) {
                 clonedCompositeParticipants.add(new DefaultGradleParticipantBuild(build));
             }
-            CompositeParameters compositeParameters = new CompositeParameters(clonedCompositeParticipants, parameters.getGradleUserHomeDir(), parameters.getDaemonBaseDir(null), parameters.getDaemonMaxIdleTimeValue(), parameters.getDaemonMaxIdleTimeUnits(), parameters.isEmbeddedParticipants());
+            CompositeParameters compositeParameters = new CompositeParameters(clonedCompositeParticipants, parameters.getGradleUserHomeDir(), parameters.getDaemonBaseDir(null), parameters.getDaemonMaxIdleTimeValue(), parameters.getDaemonMaxIdleTimeUnits(), parameters.isEmbeddedParticipants(), parameters.getCompositeTargetBuildRootDir(null));
             actionParameters = new DefaultCompositeBuildActionParameters(daemonParameters.getEffectiveSystemProperties(),
                 System.getenv(), SystemProperties.getInstance().getCurrentDir(), parameters.getBuildLogLevel(), daemonParameters.getDaemonUsage(), continuous, false, classPath, compositeParameters);
         } else {

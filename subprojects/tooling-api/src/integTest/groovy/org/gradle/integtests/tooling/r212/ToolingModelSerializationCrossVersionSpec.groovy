@@ -15,7 +15,6 @@
  */
 
 package org.gradle.integtests.tooling.r212
-
 import org.gradle.integtests.tooling.fixture.TargetGradleVersion
 import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
 import org.gradle.integtests.tooling.fixture.ToolingApiVersion
@@ -23,7 +22,7 @@ import org.gradle.tooling.model.eclipse.EclipseProject
 import org.gradle.tooling.model.eclipse.HierarchicalEclipseProject
 import org.gradle.util.UsesNativeServices
 
-@ToolingApiVersion('>=2.12')
+@ToolingApiVersion(">=2.12")
 @TargetGradleVersion(">=1.3")
 @UsesNativeServices
 class ToolingModelSerializationCrossVersionSpec extends ToolingApiSpecification {

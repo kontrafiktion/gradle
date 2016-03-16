@@ -18,7 +18,10 @@ package org.gradle.tooling.internal.adapter;
 import org.gradle.api.Action;
 import org.gradle.internal.UncheckedException;
 import org.gradle.internal.reflect.DirectInstantiator;
-import org.gradle.internal.typeconversion.*;
+import org.gradle.internal.typeconversion.EnumFromCharSequenceNotationParser;
+import org.gradle.internal.typeconversion.NotationConverterToNotationParserAdapter;
+import org.gradle.internal.typeconversion.NotationParser;
+import org.gradle.internal.typeconversion.TypeConversionException;
 import org.gradle.tooling.model.DomainObjectSet;
 import org.gradle.tooling.model.internal.Exceptions;
 import org.gradle.tooling.model.internal.ImmutableDomainObjectSet;
@@ -127,6 +130,64 @@ public class ProtocolToModelAdapter implements Serializable {
         } catch (TypeConversionException e) {
             throw new IllegalArgumentException(String.format("Can't convert '%s' to enum type '%s'", sourceObject, targetType.getSimpleName()), e);
         }
+    }
+
+    private Object convert(Type targetType, Object sourceObject, Action<? super SourceObjectMapping> mapping) {
+        if (targetType instanceof ParameterizedType) {
+            ParameterizedType parameterizedTargetType = (ParameterizedType) targetType;
+            if (parameterizedTargetType.getRawType() instanceof Class) {
+                Class<?> rawClass = (Class<?>) parameterizedTargetType.getRawType();
+                if (Iterable.class.isAssignableFrom(rawClass)) {
+                    Type targetElementType = getElementType(parameterizedTargetType, 0);
+                    return convertCollectionInternal(rawClass, targetElementType, (Iterable<?>) sourceObject, mapping);
+                }
+                if (Map.class.isAssignableFrom(rawClass)) {
+                    Type targetKeyType = getElementType(parameterizedTargetType, 0);
+                    Type targetValueType = getElementType(parameterizedTargetType, 1);
+                    return convertMap(rawClass, targetKeyType, targetValueType, (Map<?, ?>) sourceObject, mapping);
+                }
+            }
+        }
+        if (targetType instanceof Class) {
+            if (((Class) targetType).isPrimitive()) {
+                return sourceObject;
+            }
+            return adapt((Class) targetType, sourceObject, mapping);
+        }
+        throw new UnsupportedOperationException(String.format("Cannot convert object of %s to %s.", sourceObject.getClass(), targetType));
+    }
+
+    private Map<Object, Object> convertMap(Class<?> mapClass, Type targetKeyType, Type targetValueType, Map<?, ?> sourceObject, Action<? super SourceObjectMapping> mapping) {
+        Map<Object, Object> convertedElements = collectionMapper.createEmptyMap(mapClass);
+        for (Map.Entry<?, ?> entry : sourceObject.entrySet()) {
+            convertedElements.put(convert(targetKeyType, entry.getKey(), mapping), convert(targetValueType, entry.getValue(), mapping));
+        }
+        return convertedElements;
+    }
+
+    private Object convertCollectionInternal(Class<?> collectionClass, Type targetElementType, Iterable<?> sourceObject, Action<? super SourceObjectMapping> mapping) {
+        Collection<Object> convertedElements = collectionMapper.createEmptyCollection(collectionClass);
+        convertCollectionInternal(convertedElements, targetElementType, sourceObject, mapping);
+        if (collectionClass.equals(DomainObjectSet.class)) {
+            return new ImmutableDomainObjectSet(convertedElements);
+        } else {
+            return convertedElements;
+        }
+    }
+
+    private void convertCollectionInternal(Collection<Object> targetCollection, Type targetElementType, Iterable<?> sourceObject, Action<? super SourceObjectMapping> mapping) {
+        for (Object element : sourceObject) {
+            targetCollection.add(convert(targetElementType, element, mapping));
+        }
+    }
+
+    private Type getElementType(ParameterizedType type, int index) {
+        Type elementType = type.getActualTypeArguments()[index];
+        if (elementType instanceof WildcardType) {
+            WildcardType wildcardType = (WildcardType) elementType;
+            return wildcardType.getUpperBounds()[0];
+        }
+        return elementType;
     }
 
     /**
@@ -292,54 +353,8 @@ public class ProtocolToModelAdapter implements Serializable {
         public void invoke(MethodInvocation invocation) throws Throwable {
             next.invoke(invocation);
             if (invocation.found() && invocation.getResult() != null) {
-                invocation.setResult(convert(invocation.getResult(), invocation.getGenericReturnType()));
+                invocation.setResult(convert(invocation.getGenericReturnType(), invocation.getResult(), mapping));
             }
-        }
-
-        private Object convert(Object value, Type targetType) {
-            if (targetType instanceof ParameterizedType) {
-                ParameterizedType parameterizedTargetType = (ParameterizedType) targetType;
-                if (parameterizedTargetType.getRawType() instanceof Class) {
-                    Class<?> rawClass = (Class<?>) parameterizedTargetType.getRawType();
-                    if (Iterable.class.isAssignableFrom(rawClass)) {
-                        Type targetElementType = getElementType(parameterizedTargetType, 0);
-                        Collection<Object> convertedElements = collectionMapper.createEmptyCollection(rawClass);
-                        for (Object element : (Iterable<?>) value) {
-                            convertedElements.add(convert(element, targetElementType));
-                        }
-                        if (rawClass.equals(DomainObjectSet.class)) {
-                            return new ImmutableDomainObjectSet(convertedElements);
-                        } else {
-                            return convertedElements;
-                        }
-                    }
-                    if (Map.class.isAssignableFrom(rawClass)) {
-                        Type targetKeyType = getElementType(parameterizedTargetType, 0);
-                        Type targetValueType = getElementType(parameterizedTargetType, 1);
-                        Map<Object, Object> convertedElements = collectionMapper.createEmptyMap(rawClass);
-                        for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
-                            convertedElements.put(convert(entry.getKey(), targetKeyType), convert(entry.getValue(), targetValueType));
-                        }
-                        return convertedElements;
-                    }
-                }
-            }
-            if (targetType instanceof Class) {
-                if (((Class) targetType).isPrimitive()) {
-                    return value;
-                }
-                return adapt((Class) targetType, value, mapping);
-            }
-            throw new UnsupportedOperationException(String.format("Cannot convert object of %s to %s.", value.getClass(), targetType));
-        }
-
-        private Type getElementType(ParameterizedType type, int index) {
-            Type elementType = type.getActualTypeArguments()[index];
-            if (elementType instanceof WildcardType) {
-                WildcardType wildcardType = (WildcardType) elementType;
-                return wildcardType.getUpperBounds()[0];
-            }
-            return elementType;
         }
     }
 

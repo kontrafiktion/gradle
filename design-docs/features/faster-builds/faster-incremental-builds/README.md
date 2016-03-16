@@ -1,33 +1,39 @@
-Changes to improve build execution time when build outputs are mostly up-to-date. 
+Investigate and improve build execution time when build outputs are mostly up-to-date. 
 
 Audience is developers that are using the Gradle daemon.
 
-### Implementation plan
+## Implementation plan
 
-- Review and update performance tests to measure this and lock in improvements.
+- [ ] Review and update performance tests to measure this and lock in improvements.
     - Incremental build for large Java project
     - Incremental build for project with large dependency graph
-- Profile test builds and use results to select improvements to implement 
+- [ ] Profile test builds and use results to select improvements to implement 
+- [ ] [Reduce directory scanning during incremental build](reduced-directory-scanning)
         
 ### Potential improvements
     
 Up-to-date checks    
 
 - Fix hotspots identified by profiling
-- Reuse the result of directory scanning
-- Don't scan input directory multiple times when executing a task
+- Write cache updates to the backing persistent store asynchronously (in worker pool)
 - Improve in-heap cache management to evict entries that aren't likely to be used, such as when switching builds.
 - Don't cache the result of `PatternSpec` evaluation. It's now faster to evaluate each time than cache the result
 
 Dependency resolution
 
+- Don't parse ivy.xml/pom.xml on each resolve for modules in local repositories.
+- Store cached module meta-data in a more efficient format than ivy.xml. 
 - Fix hotspots identified by profiling
 - Reuse resolution result for configuration that has same inputs as another.
 - Reuse resolution result across builds.
-    
+
+## Stories
+
+TBD    
+
 ## Notes    
 
-Various notes collected from old design specs.
+The following are notes collected from old design specs.
 
 ### Dependency resolution result reuse    
 

@@ -15,21 +15,25 @@
  */
 
 package org.gradle.integtests.tooling.fixture
-
 import groovy.transform.stc.ClosureParams
 import groovy.transform.stc.SimpleType
 import org.gradle.test.fixtures.file.TestFile
+import org.gradle.tooling.composite.GradleBuild
 import org.gradle.tooling.composite.GradleConnection
+import org.gradle.tooling.composite.ModelResult
+import org.gradle.util.GradleVersion
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 
-@ToolingApiVersion('>=2.12')
-@TargetGradleVersion('>=2.12')
-// Hack, disable tests on windows temporarily until I figure out why the tests are taking so long
-@Requires(TestPrecondition.NOT_WINDOWS)
+@ToolingApiVersion(ToolingApiVersions.SUPPORTS_COMPOSITE_BUILD)
+@TargetGradleVersion(">=1.0")
+@Requires([TestPrecondition.NOT_WINDOWS]) // TODO:DAZ Re-enable these tests on Windows
 abstract class CompositeToolingApiSpecification extends AbstractToolingApiSpecification {
 
-    boolean useEmbeddedParticipants = false
+    static GradleVersion getTargetDistVersion() {
+        // Create a copy to work around classloader issues
+        GradleVersion.version(targetDist.version.baseVersion.version)
+    }
 
     GradleConnection createComposite(File... rootProjectDirectories) {
         createComposite(rootProjectDirectories as List<File>)
@@ -39,8 +43,7 @@ abstract class CompositeToolingApiSpecification extends AbstractToolingApiSpecif
         GradleConnection.Builder builder = createCompositeBuilder()
 
         rootProjectDirectories.each {
-            // TODO: this isn't the right way to configure the gradle distribution
-            builder.addBuild(it, dist.gradleHomeDir)
+            builder.addBuild(createGradleBuildParticipant(it))
         }
 
         builder.build()
@@ -48,8 +51,17 @@ abstract class CompositeToolingApiSpecification extends AbstractToolingApiSpecif
 
     GradleConnection.Builder createCompositeBuilder() {
         def builder = toolingApi.createCompositeBuilder()
-        builder.embeddedParticipants(useEmbeddedParticipants)
+//        if (embedCoordinatorAndParticipants) {
+            // Embed everything if requested
+//            builder.embeddedParticipants(true)
+//            builder.embeddedCoordinator(true)
+//            builder.useClasspathDistribution()
+//        }
         return builder
+    }
+
+    GradleBuild createGradleBuildParticipant(File rootDir) {
+        return toolingApi.createCompositeParticipant(rootDir)
     }
 
     def <T> T withCompositeConnection(File rootProjectDir, @ClosureParams(value = SimpleType, options = [ "org.gradle.tooling.composite.GradleConnection" ]) Closure<T> c) {
@@ -74,7 +86,7 @@ abstract class CompositeToolingApiSpecification extends AbstractToolingApiSpecif
         rootDir.file(path)
     }
 
-    ProjectTestFile populate(String projectName, @DelegatesTo(ProjectTestFile) Closure cl) {
+    TestFile populate(String projectName, @DelegatesTo(ProjectTestFile) Closure cl) {
         def project = new ProjectTestFile(rootDir, projectName)
         project.with(cl)
         project
@@ -100,12 +112,32 @@ abstract class CompositeToolingApiSpecification extends AbstractToolingApiSpecif
         TestFile getSettingsFile() {
             file("settings.gradle")
         }
+        void addChildDir(String name) {
+            file(name).file("build.gradle") << "// Dummy child build"
+        }
     }
 
-    List<Throwable> getCausalChain(Throwable throwable) {
-        def causes = [];
+    // Transforms Iterable<ModelResult<T>> into Iterable<T>
+    def unwrap(Iterable<ModelResult> modelResults) {
+        modelResults.collect { it.model }
+    }
+
+    boolean assertFailure(Throwable failure, String... messages) {
+        assert failure != null
+        def causes = getCauses(failure)
+
+        messages.each { message ->
+            assert causes.contains(message)
+        }
+    }
+
+    private static String getCauses(Throwable throwable) {
+        def causes = '';
         while (throwable != null) {
-            causes.add(throwable)
+            if (throwable.message != null) {
+                causes += throwable.message
+                causes += '\n'
+            }
             throwable = throwable.cause
         }
         causes

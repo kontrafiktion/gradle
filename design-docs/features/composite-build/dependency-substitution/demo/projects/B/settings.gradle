@@ -1,2 +1,4 @@
-rootProject.name = 'producer'
-include 'y', 'z'
+rootProject.name = 'y'
+
+include ':y'
+include ':z'
