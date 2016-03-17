@@ -4,6 +4,8 @@ import org.gradle.tooling.model.eclipse.EclipseProject
 
 task printModel << {
     def builder = GradleConnector.newGradleConnectionBuilder()
+    builder.embeddedCoordinator(true)
+    builder.useClasspathDistribution()
     rootProjectDirectories().each {
         println "Adding project $it.absolutePath to composite"
         def participant = GradleConnector.newGradleBuildBuilder().forProjectDirectory(it).useInstallation(gradle.gradleHomeDir).create()

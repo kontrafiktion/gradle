@@ -19,6 +19,7 @@ package org.gradle.tooling.internal.provider.runner;
 import org.gradle.StartParameter;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuildContext;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeContextBuilder;
+import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeScopeServices;
 import org.gradle.api.logging.LogLevel;
 import org.gradle.configuration.GradleLauncherMetaData;
 import org.gradle.initialization.*;
@@ -28,7 +29,9 @@ import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.composite.*;
 import org.gradle.internal.invocation.BuildAction;
 import org.gradle.internal.invocation.BuildActionRunner;
+import org.gradle.internal.service.DefaultServiceRegistry;
 import org.gradle.internal.service.ServiceRegistry;
+import org.gradle.internal.service.ServiceRegistryBuilder;
 import org.gradle.internal.service.scopes.BuildSessionScopeServices;
 import org.gradle.launcher.daemon.configuration.DaemonUsage;
 import org.gradle.launcher.exec.BuildActionParameters;
@@ -72,8 +75,19 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
 
     private void executeTasksInProcess(StartParameter parentStartParam, CompositeBuildActionParameters actionParameters, BuildCancellationToken cancellationToken, ServiceRegistry sharedServices) {
         CompositeParameters compositeParameters = actionParameters.getCompositeParameters();
+        List<GradleParticipantBuild> participantBuilds = compositeParameters.getBuilds();
+        GradleLauncherFactory launcherFactory = sharedServices.get(GradleLauncherFactory.class);
+        CompositeBuildContext context = constructCompositeContext(launcherFactory, participantBuilds);
+
+        DefaultServiceRegistry compositeServices = (DefaultServiceRegistry) ServiceRegistryBuilder.builder()
+            .displayName("Composite services")
+            .parent(sharedServices)
+            .build();
+        compositeServices.add(CompositeBuildContext.class, context);
+        compositeServices.addProvider(new CompositeScopeServices(parentStartParam, compositeServices));
+
         boolean buildFound = false;
-        for (GradleParticipantBuild participant : compositeParameters.getBuilds()) {
+        for (GradleParticipantBuild participant : participantBuilds) {
             if (!participant.getProjectDir().getAbsolutePath().equals(compositeParameters.getCompositeTargetBuildRootDir().getAbsolutePath())) {
                 continue;
             }
@@ -85,9 +99,8 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             startParameter.setProjectDir(participant.getProjectDir());
             startParameter.setSearchUpwards(false);
 
-            GradleLauncherFactory launcherFactory = sharedServices.get(GradleLauncherFactory.class);
             DefaultBuildRequestContext requestContext = new DefaultBuildRequestContext(new DefaultBuildRequestMetaData(new GradleLauncherMetaData(), System.currentTimeMillis()), new DefaultBuildCancellationToken(), new NoOpBuildEventConsumer());
-            launcherFactory.newInstance(startParameter, requestContext, sharedServices).run();
+            launcherFactory.newInstance(startParameter, requestContext, compositeServices).run();
         }
         if (!buildFound) {
             throw new IllegalStateException("Build not part of composite");
@@ -109,14 +122,14 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
 
         PayloadSerializer payloadSerializer = sharedServices.get(PayloadSerializer.class);
         GradleLauncherFactory gradleLauncherFactory = sharedServices.get(GradleLauncherFactory.class);
-//        CompositeBuildContext context = constructCompositeContext(gradleLauncherFactory, participantBuilds);
+        CompositeBuildContext context = constructCompositeContext(gradleLauncherFactory, participantBuilds);
 
-//        DefaultServiceRegistry compositeServices = (DefaultServiceRegistry) ServiceRegistryBuilder.builder()
-//            .displayName("Composite services")
-//            .parent(sharedServices)
-//            .build();
-//        compositeServices.add(CompositeBuildContext.class, context);
-//        compositeServices.addProvider(new CompositeScopeServices(modelAction.getStartParameter(), compositeServices));
+        DefaultServiceRegistry compositeServices = (DefaultServiceRegistry) ServiceRegistryBuilder.builder()
+            .displayName("Composite services")
+            .parent(sharedServices)
+            .build();
+        compositeServices.add(CompositeBuildContext.class, context);
+        compositeServices.addProvider(new CompositeScopeServices(modelAction.getStartParameter(), compositeServices));
 
         BuildActionRunner runner = new ClientProvidedBuildActionRunner();
         org.gradle.launcher.exec.BuildActionExecuter<BuildActionParameters> buildActionExecuter = new InProcessBuildActionExecuter(gradleLauncherFactory, runner);
@@ -134,14 +147,14 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             StartParameter startParameter = modelAction.getStartParameter().newInstance();
             startParameter.setProjectDir(participant.getProjectDir());
 
-            ServiceRegistry buildScopedServices = new BuildSessionScopeServices(sharedServices, startParameter, ClassPath.EMPTY);
+            ServiceRegistry buildScopedServices = new BuildSessionScopeServices(compositeServices, startParameter, ClassPath.EMPTY);
 
             ClientProvidedBuildAction mappedAction = new ClientProvidedBuildAction(startParameter, serializedAction, modelAction.getClientSubscriptions());
 
             try {
                 BuildActionResult result = (BuildActionResult) buildActionExecuter.execute(mappedAction, requestContext, actionParameters, buildScopedServices);
                 if (result.result != null) {
-                    Map<Object, Object> values = (Map<Object, Object>) payloadSerializer.deserialize(result.result);
+                    Map<Object, Object> values = Cast.uncheckedCast(payloadSerializer.deserialize(result.result));
                     for (Map.Entry<Object, Object> e : values.entrySet()) {
                         InternalProjectIdentity internalProjectIdentity = (InternalProjectIdentity) e.getKey();
                         results.put(convertToProjectIdentity(internalProjectIdentity), e.getValue());
