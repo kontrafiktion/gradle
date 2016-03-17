@@ -30,6 +30,7 @@ import org.codehaus.plexus.classworlds.ClassWorld;
 import org.codehaus.plexus.component.repository.exception.ComponentLookupException;
 import org.codehaus.plexus.configuration.PlexusConfigurationException;
 import org.sonatype.aether.RepositorySystemSession;
+import org.sonatype.aether.impl.internal.EnhancedLocalRepositoryManager;
 import org.sonatype.aether.util.DefaultRepositorySystemSession;
 import org.gradle.util.CollectionUtils;
 
@@ -68,6 +69,12 @@ public class MavenProjectsCreator {
         populator.populateDefaults(executionRequest);
         ProjectBuildingRequest buildingRequest = executionRequest.getProjectBuildingRequest();
         buildingRequest.setProcessPlugins(false);
+
+        DefaultRepositorySystemSession sx = new DefaultRepositorySystemSession();
+        EnhancedLocalRepositoryManager lm = new EnhancedLocalRepositoryManager(new File(buildingRequest.getLocalRepository().getBasedir()));
+        sx.setLocalRepositoryManager(lm);
+        buildingRequest.setRepositorySession(sx);
+
         MavenProject mavenProject = builder.build(pomFile, buildingRequest).getProject();
         Set<MavenProject> reactorProjects = new LinkedHashSet<MavenProject>();
 
@@ -75,6 +82,7 @@ public class MavenProjectsCreator {
         //the converter should not depend on the order of reactor projects.
         //we should add coverage for nested multi-project builds with multiple parents.
         reactorProjects.add(mavenProject);
+
         List<ProjectBuildingResult> allProjects = builder.build(ImmutableList.of(pomFile), true, buildingRequest);
         CollectionUtils.collect(allProjects, reactorProjects, new Transformer<MavenProject, ProjectBuildingResult>() {
             public MavenProject transform(ProjectBuildingResult original) {
