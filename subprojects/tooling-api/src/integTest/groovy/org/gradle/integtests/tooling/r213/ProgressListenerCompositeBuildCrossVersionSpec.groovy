@@ -25,7 +25,7 @@ import org.gradle.tooling.model.eclipse.EclipseProject
  * Tooling client provides progress listener for composite model request
  */
 class ProgressListenerCompositeBuildCrossVersionSpec extends CompositeToolingApiSpecification {
-    static final List<String> IGNORED_EVENTS = ['Validate distribution', '', 'Compiling script into cache']
+    static final List<String> IGNORED_EVENTS = ['Validate distribution', '', 'Compiling script into cache', 'Build']
 
     def "compare events from a composite build and a regular build with single build"() {
         given:
@@ -135,6 +135,7 @@ class ProgressListenerCompositeBuildCrossVersionSpec extends CompositeToolingApi
 
         @Override
         void statusChanged(ProgressEvent event) {
+            println event.description
             eventDescriptions.add(event.description)
         }
     }

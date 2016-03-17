@@ -34,7 +34,6 @@ import org.gradle.launcher.daemon.configuration.DaemonUsage;
 import org.gradle.launcher.exec.BuildActionParameters;
 import org.gradle.launcher.exec.DefaultBuildActionParameters;
 import org.gradle.launcher.exec.InProcessBuildActionExecuter;
-import org.gradle.logging.ProgressLoggerFactory;
 import org.gradle.tooling.BuildController;
 import org.gradle.tooling.internal.adapter.ProtocolToModelAdapter;
 import org.gradle.tooling.internal.consumer.connection.InternalBuildActionAdapter;
@@ -57,7 +56,6 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             return;
         }
         Class<?> modelType = resolveModelType((BuildModelAction) action);
-        ProgressLoggerFactory progressLoggerFactory = buildController.getBuildScopeServices().get(ProgressLoggerFactory.class);
         Map<Object, Object> results = null;
         if (modelType != Void.class) {
             results = new HashMap<Object, Object>();
@@ -66,13 +64,13 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             if (!((BuildModelAction) action).isRunTasks()) {
                 throw new IllegalStateException("No tasks defined.");
             }
-            executeTasksInProcess(action.getStartParameter(), actionParameters, requestContext.getCancellationToken(), progressLoggerFactory, buildController.getBuildScopeServices());
+            executeTasksInProcess(action.getStartParameter(), actionParameters, requestContext.getCancellationToken(), buildController.getBuildScopeServices());
         }
         PayloadSerializer payloadSerializer = buildController.getBuildScopeServices().get(PayloadSerializer.class);
         buildController.setResult(new BuildActionResult(payloadSerializer.serialize(results), null));
     }
 
-    private void executeTasksInProcess(StartParameter parentStartParam, CompositeBuildActionParameters actionParameters, BuildCancellationToken cancellationToken, ProgressLoggerFactory progressLoggerFactory, ServiceRegistry sharedServices) {
+    private void executeTasksInProcess(StartParameter parentStartParam, CompositeBuildActionParameters actionParameters, BuildCancellationToken cancellationToken, ServiceRegistry sharedServices) {
         CompositeParameters compositeParameters = actionParameters.getCompositeParameters();
         boolean buildFound = false;
         for (GradleParticipantBuild participant : compositeParameters.getBuilds()) {
